@@ -126,7 +126,6 @@
 
     let model = null;
     let uploadedImage = null;
-    let herkendeDrone = "Onbekend";
 
     const previewImage = document.getElementById("previewImage");
     const imageUpload = document.getElementById("imageUpload");
@@ -142,7 +141,6 @@
       reader.onload = function(e) {
         previewImage.src = e.target.result;
         previewImage.style.display = "block";
-        uploadedImage = previewImage;
         droneResult.className = "info";
         droneResult.innerHTML = "📷 Foto geladen. Klaar om te herkennen.";
       };
@@ -158,17 +156,16 @@
     }
 
     async function herkenDrone() {
-      if (!uploadedImage) {
+      if (!previewImage.src) {
         throw new Error("Upload eerst een dronefoto.");
       }
 
       await loadModelIfNeeded();
 
-      const predictions = await model.predict(uploadedImage);
+      const predictions = await model.predict(previewImage);
       predictions.sort((a, b) => b.probability - a.probability);
 
       const beste = predictions[0];
-      herkendeDrone = beste.className;
 
       droneResult.className = "info";
       droneResult.innerHTML =
@@ -179,54 +176,60 @@
     }
 
     function getDroneInstellingen(droneNaam) {
-      const naam = droneNaam.toLowerCase();
+      const naam = droneNaam.toLowerCase().trim();
 
+      // 1. Gear2Play Sky Lightning Drone XS
       if (
+        naam === "gear2play sky lightning drone xs" ||
         naam.includes("sky lightning") ||
-        naam.includes("lightning xs") ||
-        naam.includes("gear2play")
+        naam.includes("lightning drone xs")
       ) {
         return {
           label: "Gear2Play Sky Lightning Drone XS",
           maxGustsGoed: 15,
           maxGustsMatig: 20,
-          uitleg: "Lichte mini stuntdrone: gevoelig voor wind."
+          uitleg: "Lichte mini stuntdrone: heel gevoelig voor wind."
         };
       }
 
-      if (naam.includes("mini")) {
+      // 2. DJI Mini
+      if (
+        naam === "dji mini" ||
+        naam.includes("dji mini") ||
+        naam.includes("mini")
+      ) {
         return {
-          label: "DJI Mini / lichte drone",
+          label: "DJI Mini",
           maxGustsGoed: 20,
           maxGustsMatig: 28,
-          uitleg: "Lichte drone: best voorzichtig met wind."
+          uitleg: "Lichte cameradrone: best voorzichtig bij wind."
         };
       }
 
-      if (naam.includes("air") || naam.includes("mavic")) {
+      // 3. DJI Air
+      if (
+        naam === "dji air" ||
+        naam.includes("dji air") ||
+        naam.includes("air")
+      ) {
         return {
-          label: "DJI Air / Mavic",
+          label: "DJI Air",
           maxGustsGoed: 25,
           maxGustsMatig: 35,
-          uitleg: "Stevigere drone: kan iets meer wind aan."
+          uitleg: "Stevigere drone: kan wat meer wind aan."
         };
       }
 
-      if (naam.includes("fpv") || naam.includes("racer")) {
+      // 4. FPV
+      if (
+        naam === "fpv" ||
+        naam.includes("fpv")
+      ) {
         return {
-          label: "FPV drone",
+          label: "FPV",
           maxGustsGoed: 30,
           maxGustsMatig: 40,
-          uitleg: "FPV drone: nog altijd opletten, maar vaak krachtiger."
-        };
-      }
-
-      if (naam.includes("toy") || naam.includes("kids") || naam.includes("stunt")) {
-        return {
-          label: "Mini stuntdrone",
-          maxGustsGoed: 15,
-          maxGustsMatig: 20,
-          uitleg: "Speelgoeddrone: heel gevoelig voor wind."
+          uitleg: "Snellere en krachtigere drone: kan meer wind aan, maar blijf opletten."
         };
       }
 
