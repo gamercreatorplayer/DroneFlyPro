@@ -3,18 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Drone vliegcheck</title>
+  <title>🚁 Drone vliegcheck met fotoherkenning</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
       background: #f4f7fb;
       margin: 0;
-      padding: 40px;
+      padding: 30px;
       text-align: center;
     }
 
     .box {
-      max-width: 700px;
+      max-width: 900px;
       margin: 0 auto;
       background: white;
       padding: 30px;
@@ -24,30 +28,42 @@
 
     h1 {
       margin-top: 0;
-      font-size: 36px;
+      font-size: 34px;
     }
 
     p {
       font-size: 18px;
     }
 
-    button {
-      font-size: 20px;
-      padding: 15px 24px;
-      border: none;
+    input[type="file"], button {
+      font-size: 18px;
+      padding: 12px 18px;
       border-radius: 12px;
+      margin: 10px 0;
+    }
+
+    button {
+      border: none;
       cursor: pointer;
       background: #222;
       color: white;
     }
 
-    #status {
-      margin-top: 25px;
-      padding: 20px;
+    #previewImage {
+      max-width: 320px;
+      max-height: 240px;
+      margin-top: 15px;
       border-radius: 16px;
-      font-size: 26px;
+      display: none;
+      border: 2px solid #ddd;
+    }
+
+    #droneResult, #status {
+      margin-top: 20px;
+      padding: 18px;
+      border-radius: 16px;
+      font-size: 24px;
       font-weight: bold;
-      min-height: 80px;
     }
 
     .info {
@@ -77,19 +93,150 @@
       font-weight: normal;
       line-height: 1.6;
     }
+
+    .hint {
+      margin-top: 14px;
+      font-size: 14px;
+      color: #666;
+    }
   </style>
 </head>
 <body>
   <div class="box">
     <h1>🚁 Mag ik vliegen?</h1>
-    <p>Klik op de knop en ik check automatisch het weer en zonneweer.</p>
-    <button id="checkBtn">Check automatisch</button>
-    <div id="status" class="info">Klik op de knop.</div>
+    <p>Upload een foto van je drone. Ik herken het type en pas de vliegregels automatisch aan.</p>
+
+    <input type="file" id="imageUpload" accept="image/*">
+    <br>
+    <img id="previewImage" alt="Drone preview">
+
+    <div id="droneResult" class="info">Nog geen drone herkend.</div>
+
+    <button id="checkBtn">Herken drone + check vliegweer</button>
+
+    <div id="status" class="info">Upload eerst een foto en klik dan op de knop.</div>
+
+    <div class="hint">
+      Deze versie gebruikt jouw Teachable Machine-model.
+    </div>
   </div>
 
   <script>
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/llpcFbVDm/";
+
+    let model = null;
+    let uploadedImage = null;
+    let herkendeDrone = "Onbekend";
+
+    const previewImage = document.getElementById("previewImage");
+    const imageUpload = document.getElementById("imageUpload");
+    const droneResult = document.getElementById("droneResult");
     const statusBox = document.getElementById("status");
     const checkBtn = document.getElementById("checkBtn");
+
+    imageUpload.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        previewImage.src = e.target.result;
+        previewImage.style.display = "block";
+        uploadedImage = previewImage;
+        droneResult.className = "info";
+        droneResult.innerHTML = "📷 Foto geladen. Klaar om te herkennen.";
+      };
+      reader.readAsDataURL(file);
+    });
+
+    async function loadModelIfNeeded() {
+      if (!model) {
+        const modelURL = MODEL_URL + "model.json";
+        const metadataURL = MODEL_URL + "metadata.json";
+        model = await tmImage.load(modelURL, metadataURL);
+      }
+    }
+
+    async function herkenDrone() {
+      if (!uploadedImage) {
+        throw new Error("Upload eerst een dronefoto.");
+      }
+
+      await loadModelIfNeeded();
+
+      const predictions = await model.predict(uploadedImage);
+      predictions.sort((a, b) => b.probability - a.probability);
+
+      const beste = predictions[0];
+      herkendeDrone = beste.className;
+
+      droneResult.className = "info";
+      droneResult.innerHTML =
+        "🤖 Herkende drone: " + beste.className +
+        '<span class="klein">Zekerheid: ' + (beste.probability * 100).toFixed(1) + "%</span>";
+
+      return beste.className;
+    }
+
+    function getDroneInstellingen(droneNaam) {
+      const naam = droneNaam.toLowerCase();
+
+      if (
+        naam.includes("sky lightning") ||
+        naam.includes("lightning xs") ||
+        naam.includes("gear2play")
+      ) {
+        return {
+          label: "Gear2Play Sky Lightning Drone XS",
+          maxGustsGoed: 15,
+          maxGustsMatig: 20,
+          uitleg: "Lichte mini stuntdrone: gevoelig voor wind."
+        };
+      }
+
+      if (naam.includes("mini")) {
+        return {
+          label: "DJI Mini / lichte drone",
+          maxGustsGoed: 20,
+          maxGustsMatig: 28,
+          uitleg: "Lichte drone: best voorzichtig met wind."
+        };
+      }
+
+      if (naam.includes("air") || naam.includes("mavic")) {
+        return {
+          label: "DJI Air / Mavic",
+          maxGustsGoed: 25,
+          maxGustsMatig: 35,
+          uitleg: "Stevigere drone: kan iets meer wind aan."
+        };
+      }
+
+      if (naam.includes("fpv") || naam.includes("racer")) {
+        return {
+          label: "FPV drone",
+          maxGustsGoed: 30,
+          maxGustsMatig: 40,
+          uitleg: "FPV drone: nog altijd opletten, maar vaak krachtiger."
+        };
+      }
+
+      if (naam.includes("toy") || naam.includes("kids") || naam.includes("stunt")) {
+        return {
+          label: "Mini stuntdrone",
+          maxGustsGoed: 15,
+          maxGustsMatig: 20,
+          uitleg: "Speelgoeddrone: heel gevoelig voor wind."
+        };
+      }
+
+      return {
+        label: droneNaam,
+        maxGustsGoed: 18,
+        maxGustsMatig: 25,
+        uitleg: "Onbekend type: ik gebruik veilige standaardregels."
+      };
+    }
 
     function getLocation() {
       return new Promise((resolve, reject) => {
@@ -110,93 +257,99 @@
       });
     }
 
-    async function startCheck() {
+    async function checkWeerMetDroneRegels(droneNaam) {
+      const droneInfo = getDroneInstellingen(droneNaam);
+
+      const pos = await getLocation();
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+
+      const weerUrl =
+        "https://api.open-meteo.com/v1/forecast?latitude=" +
+        lat +
+        "&longitude=" +
+        lon +
+        "&current=wind_speed_10m,wind_gusts_10m,precipitation&wind_speed_unit=kmh";
+
+      const weerRes = await fetch(weerUrl);
+      if (!weerRes.ok) {
+        throw new Error("Weerdata kon niet geladen worden.");
+      }
+
+      const weerData = await weerRes.json();
+
+      const wind = Number(weerData.current?.wind_speed_10m ?? 0);
+      const gusts = Number(weerData.current?.wind_gusts_10m ?? 0);
+      const regen = Number(weerData.current?.precipitation ?? 0);
+
+      const kpRes = await fetch("https://services.swpc.noaa.gov/json/planetary_k_index_1m.json");
+      if (!kpRes.ok) {
+        throw new Error("Zonneweerdata kon niet geladen worden.");
+      }
+
+      const kpData = await kpRes.json();
+      if (!Array.isArray(kpData) || kpData.length === 0) {
+        throw new Error("Geen Kp-data gevonden.");
+      }
+
+      const laatste = kpData[kpData.length - 1];
+      const kpRaw = laatste?.kp ?? laatste?.Kp ?? laatste?.estimated_kp ?? 0;
+
+      let kp = parseFloat(kpRaw);
+      if (Number.isNaN(kp)) kp = 0;
+
+      let melding = "";
+      let klasse = "";
+      let extra = [];
+
+      if (gusts > droneInfo.maxGustsMatig) {
+        extra.push("💨 Te harde windstoten voor deze drone");
+      } else if (gusts > droneInfo.maxGustsGoed) {
+        extra.push("💨 Best veel windstoten voor deze drone");
+      }
+
+      if (regen > 0) {
+        extra.push("🌧️ Regen");
+      }
+
+      if (kp >= 6) {
+        extra.push("🌞 Sterke zonnestorm");
+      } else if (kp >= 4) {
+        extra.push("🌞 Actieve zon");
+      }
+
+      if (gusts > droneInfo.maxGustsMatig || regen > 0 || kp >= 6) {
+        klasse = "slecht";
+        melding = "❌ Beter niet vliegen";
+      } else if (gusts > droneInfo.maxGustsGoed || kp >= 4) {
+        klasse = "matig";
+        melding = "⚠️ Voorzichtig vliegen";
+      } else {
+        klasse = "goed";
+        melding = "✅ Ja, je kan vliegen";
+      }
+
+      statusBox.className = klasse;
+      statusBox.innerHTML =
+        melding +
+        '<span class="klein">' +
+        "Drone: " + droneInfo.label + "<br>" +
+        "Uitleg: " + droneInfo.uitleg + "<br><br>" +
+        "Gemiddelde wind: " + wind.toFixed(1) + " km/u<br>" +
+        "Windstoten: " + gusts.toFixed(1) + " km/u<br>" +
+        "Regen: " + regen.toFixed(1) + " mm<br>" +
+        "Kp-index: " + kp.toFixed(1) +
+        (extra.length ? "<br><br>" + extra.join("<br>") : "") +
+        "</span>";
+    }
+
+    async function startAlles() {
       statusBox.className = "info";
-      statusBox.innerHTML = "⏳ Bezig met checken...";
+      statusBox.innerHTML = "⏳ Drone herkennen en weer checken...";
 
       try {
-        const pos = await getLocation();
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-
-        const weerUrl =
-          "https://api.open-meteo.com/v1/forecast?latitude=" +
-          lat +
-          "&longitude=" +
-          lon +
-          "&current=wind_speed_10m,wind_gusts_10m,precipitation&wind_speed_unit=kmh";
-
-        const weerRes = await fetch(weerUrl);
-        if (!weerRes.ok) {
-          throw new Error("Weerdata kon niet geladen worden.");
-        }
-
-        const weerData = await weerRes.json();
-
-        const wind = Number(weerData.current?.wind_speed_10m ?? 0);
-        const gusts = Number(weerData.current?.wind_gusts_10m ?? 0);
-        const regen = Number(weerData.current?.precipitation ?? 0);
-
-        const kpRes = await fetch("https://services.swpc.noaa.gov/json/planetary_k_index_1m.json");
-        if (!kpRes.ok) {
-          throw new Error("Zonneweerdata kon niet geladen worden.");
-        }
-
-        const kpData = await kpRes.json();
-        if (!Array.isArray(kpData) || kpData.length === 0) {
-          throw new Error("Geen Kp-data gevonden.");
-        }
-
-        const laatste = kpData[kpData.length - 1];
-        const kpRaw = laatste?.kp ?? laatste?.Kp ?? laatste?.estimated_kp ?? 0;
-
-        let kp = parseFloat(kpRaw);
-        if (Number.isNaN(kp)) {
-          kp = 0;
-        }
-
-        let melding = "";
-        let klasse = "";
-        let extra = [];
-
-        if (gusts > 30) {
-          extra.push("💨 Te harde windstoten");
-        } else if (gusts > 20) {
-          extra.push("💨 Best veel windstoten");
-        }
-
-        if (regen > 0) {
-          extra.push("🌧️ Regen");
-        }
-
-        if (kp >= 6) {
-          extra.push("🌞 Sterke zonnestorm");
-        } else if (kp >= 4) {
-          extra.push("🌞 Actieve zon");
-        }
-
-        if (gusts > 30 || regen > 0 || kp >= 6) {
-          klasse = "slecht";
-          melding = "❌ Beter niet vliegen";
-        } else if (gusts > 20 || kp >= 4) {
-          klasse = "matig";
-          melding = "⚠️ Voorzichtig vliegen";
-        } else {
-          klasse = "goed";
-          melding = "✅ Ja, je kan vliegen";
-        }
-
-        statusBox.className = klasse;
-        statusBox.innerHTML =
-          melding +
-          '<span class="klein">' +
-          "Gewone wind: " + wind.toFixed(1) + " km/u<br>" +
-          "Windstoten: " + gusts.toFixed(1) + " km/u<br>" +
-          "Regen: " + regen.toFixed(1) + " mm<br>" +
-          "Kp-index: " + kp.toFixed(1) +
-          (extra.length ? "<br><br>" + extra.join("<br>") : "") +
-          "</span>";
-
+        const droneNaam = await herkenDrone();
+        await checkWeerMetDroneRegels(droneNaam);
       } catch (error) {
         statusBox.className = "slecht";
         statusBox.innerHTML =
@@ -206,7 +359,7 @@
       }
     }
 
-    checkBtn.addEventListener("click", startCheck);
+    checkBtn.addEventListener("click", startAlles);
   </script>
 </body>
 </html>
