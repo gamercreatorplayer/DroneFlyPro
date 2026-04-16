@@ -880,16 +880,43 @@
       }
     }
 
-    correctBtn.addEventListener("click", () => {
-      correctionMessage.textContent = "Top! Ik onthoud deze herkenning als juist.";
-      correctionBox.classList.add("hidden");
-    });
+    saveCorrectionBtn.addEventListener("click", () => {
+  const echteNaam = correctNameInput.value.trim();
+
+  if (!echteNaam) {
+    correctionMessage.textContent = "Typ eerst de echte naam.";
+    return;
+  }
+
+  if (!lastRawPrediction) {
+    correctionMessage.textContent = "Geen AI-voorspelling om te verbeteren.";
+    return;
+  }
+
+  const corrections = getCorrections();
+  corrections[normalizeName(lastRawPrediction)] = echteNaam;
+  saveCorrections(corrections);
+
+  correctionMessage.textContent = "🧠 AI verbeterd! Volgende keer herkent hij dit beter.";
+
+  droneResult.innerHTML =
+    "🤖 Herkende drone: <strong>" + echteNaam + "</strong>" +
+    "<br><span class='muted'>Verbeterd door jou.</span>";
+
+  lastUsedName = echteNaam;
+
+  correctionBox.classList.add("hidden");
+});
 
     wrongBtn.addEventListener("click", () => {
-      correctionBox.classList.remove("hidden");
-      correctionMessage.textContent = "";
-      correctNameInput.focus();
-    });
+  correctionBox.classList.remove("hidden");
+  feedbackBox.classList.add("hidden");
+
+  correctionMessage.textContent = "❌ Oké, wat is de juiste naam?";
+  correctNameInput.focus();
+
+  droneResult.innerHTML += "<br><span class='muted'>❌ Deze herkenning was fout.</span>";
+});
 
     saveCorrectionBtn.addEventListener("click", () => {
       const echteNaam = correctNameInput.value.trim();
