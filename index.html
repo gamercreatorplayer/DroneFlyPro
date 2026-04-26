@@ -723,10 +723,11 @@ function calculateScore(w, kp) {
   let score = 100;
   const reasons = [];
 
-  if (w.gusts > 25) {
-    score -= 40;
-    reasons.push("Te veel windstoten");
-  }
+  if (w.gusts > 15) {
+  const penalty = (w.gusts - 15) * 3;
+  score -= penalty;
+  reasons.push("Windstoten zijn vrij sterk voor jouw drone.");
+}
 
   if (w.rain > 0) {
     score -= 40;
